@@ -1,34 +1,548 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>LYNX Remote</title>
 <style>
-:root{color-scheme:dark;--bg:#080c14;--panel:#121a29;--line:#29364d;--muted:#9aa9c2;--accent:#89a5ff;--green:#56e39b}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#1a2944 0%,var(--bg) 60%);font:15px system-ui,Segoe UI,sans-serif;color:#edf3ff;min-height:100vh}
-main{max-width:1100px;margin:auto;padding:24px 16px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9bb4ff,#596de0);display:grid;place-items:center;font-weight:900;color:#071020;font-size:20px}h1{margin:0;font-size:24px}small,.muted{color:var(--muted)}.panel{background:#121a29ef;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 20px 70px #0004;margin:0 auto}.login{max-width:460px}.field{display:block;margin:14px 0;color:var(--muted)}input{display:block;width:100%;margin-top:7px;padding:13px;border-radius:10px;border:1px solid var(--line);background:#080e19;color:white;font:inherit}button{border:0;border-radius:10px;padding:11px 15px;background:var(--accent);color:#081020;font:inherit;font-weight:700;cursor:pointer}.secondary{background:#26334a;color:#edf3ff}.full{width:100%;margin-top:8px}.error{color:#ff9b9b;min-height:20px}.hidden{display:none}.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}.status{margin-left:auto;color:var(--muted)}.screen-wrap{background:#02040a;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:260px;display:flex;align-items:center;justify-content:center;position:relative;outline:none;touch-action:none}.screen{width:100%;height:auto;max-height:calc(100vh - 190px);object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;touch-action:none;cursor:crosshair}.placeholder{padding:30px;text-align:center;color:var(--muted)}.tiny{font-size:12px;color:var(--muted);margin-top:14px}.control-note{font-size:13px;color:#c6d3eb;margin:10px 0 0}.fullview{position:fixed;inset:0;background:#000;z-index:10;display:flex;align-items:center;justify-content:center;border:0;border-radius:0;padding:0}.fullview .screen{width:auto;height:auto;max-width:100vw;max-height:100vh}.fullview button{position:absolute;top:14px;right:14px;z-index:11}.fullview .placeholder{position:absolute}@media(max-width:600px){main{padding:14px 10px}.panel{padding:15px}.status{margin-left:0;width:100%}}
-</style></head>
-<body><main>
-<div class="brand"><div class="logo">L</div><div><h1>LYNX</h1><small>Browser remote · private access</small></div></div>
-<section id="login" class="panel login"><h2>Connect to your host</h2><p class="muted">Enter your relay address and private access key.</p><form id="form"><label class="field">Relay WebSocket URL<input id="relay" type="url" placeholder="wss://your-relay.onrender.com/ws" required></label><label class="field">Access key<input id="key" type="password" autocomplete="current-password" required minlength="24"></label><button class="full" type="submit">Connect securely</button></form><p id="error" class="error"></p><p class="tiny">The access key stays in this tab and is not saved. Use only your private relay URL.</p></section>
-<section id="viewer" class="panel hidden"><div class="bar"><strong>LYNX Host</strong><span id="status" class="status">Connecting…</span><button id="fullscreen">Fullscreen</button><button id="disconnect" class="secondary">Disconnect</button></div><div id="screenWrap" class="screen-wrap" tabindex="0" aria-label="Remote Windows desktop. Click here to control the remote computer"><img id="screen" class="screen hidden" alt="Remote Windows screen" draggable="false"><div id="placeholder" class="placeholder">Waiting for your Windows host to connect…</div></div><p class="control-note">Remote control enabled: click or move the mouse over the screen, scroll, and type. Keyboard shortcuts are sent to the remote PC. Ctrl+Alt+Delete is not supported.</p><p class="tiny">Only connect to your own host. Anyone with your relay key can view and control this PC.</p></section>
+:root{color-scheme:dark;--bg:#080c14;--panel:#121a29;--line:#29364d;--muted:#9aa9c2;--accent:#89a5ff;--green:#56e39b;--amber:#f2c14e;--red:#ff8a8a}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#1a2944 0%,var(--bg) 60%);font:15px system-ui,Segoe UI,sans-serif;color:#edf3ff;min-height:100vh}
+main{max-width:1200px;margin:auto;padding:20px 14px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9bb4ff,#596de0);display:grid;place-items:center;font-weight:900;color:#071020;font-size:20px}
+h1{margin:0;font-size:24px}h2{margin:0 0 6px}
+small,.muted{color:var(--muted)}
+.panel{background:#121a29ef;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 20px 70px #0004;margin:0 auto}
+.login{max-width:460px}
+.field{display:block;margin:14px 0;color:var(--muted)}
+input,select{display:block;width:100%;margin-top:7px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#080e19;color:#fff;font:inherit}
+select{display:inline-block;width:auto;margin:0;padding:9px 10px}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:#081020;font:inherit;font-weight:700;cursor:pointer;touch-action:manipulation}
+button.secondary{background:#26334a;color:#edf3ff}
+button.on{background:var(--green);color:#06210f}
+button:disabled{opacity:.5}
+.full{width:100%;margin-top:8px}
+.error{color:var(--red);min-height:20px}
+.hidden{display:none!important}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.status{color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;background:#667;display:inline-block}
+.dot.ok{background:var(--green)}.dot.warn{background:var(--amber)}.dot.bad{background:var(--red)}
+.badge{padding:6px 10px;border-radius:999px;background:#26334a;color:var(--muted);font-size:13px}
+.badge.admin{background:#16402c;color:var(--green)}
+.screen-wrap{background:#02040a;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:240px;display:flex;align-items:center;justify-content:center;position:relative;outline:none;touch-action:none}
+.screen{width:100%;height:auto;max-height:calc(100vh - 230px);object-fit:contain;display:block;user-select:none;-webkit-user-select:none;touch-action:none;cursor:crosshair}
+.screen-wrap:fullscreen{background:#000;border-radius:0;border:0}
+.screen-wrap:fullscreen .screen{max-height:100vh;height:100vh;width:100vw}
+.placeholder{padding:30px;text-align:center;color:var(--muted)}
+.overlay{position:absolute;inset:auto 10px 10px 10px;background:#000c;border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;color:var(--amber);pointer-events:none}
+.tiny{font-size:12px;color:var(--muted);margin-top:10px}
+.kbbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.kbbar button{padding:9px 11px;background:#26334a;color:#edf3ff;min-width:44px}
+.kbbar button.on{background:var(--accent);color:#081020}
+#kbInput{position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;border:0;padding:0;font-size:16px;resize:none;pointer-events:none}
+#files{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.crumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.crumbs .path{color:var(--muted);word-break:break-all}
+.flist{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.row{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid #1d2840}
+.row:last-child{border-bottom:0}
+.row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
+.row .name.dir{cursor:pointer;color:var(--accent)}
+.row .meta{color:var(--muted);font-size:12px;white-space:nowrap}
+.row button{padding:6px 10px}
+.xfer{padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+.xfer .top{display:flex;justify-content:space-between;gap:8px}
+.bar2{height:6px;background:#0b1220;border-radius:4px;margin:6px 0;overflow:hidden}
+.bar2>div{height:100%;background:var(--accent);width:0}
+.xfer.err .bar2>div{background:var(--red)}.xfer.done .bar2>div{background:var(--green)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#1b2740;border:1px solid var(--line);padding:10px 14px;border-radius:12px;max-width:92vw;z-index:50}
+.toast.warn{border-color:var(--amber)}.toast.error{border-color:var(--red)}
+@media(max-width:600px){main{padding:12px 8px}.panel{padding:12px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><div class="logo">L</div><div><h1>LYNX</h1><small>Browser remote · private access</small></div></div>
+
+  <section id="login" class="panel login">
+    <h2>Connect to your host</h2>
+    <p class="muted">Enter your relay address and private access key.</p>
+    <form id="form">
+      <label class="field">Relay WebSocket URL<input id="relay" type="url" placeholder="wss://your-relay.onrender.com/ws" required></label>
+      <label class="field">Access key<input id="key" type="password" autocomplete="current-password" required minlength="24"></label>
+      <button class="full" type="submit">Connect securely</button>
+    </form>
+    <p id="error" class="error"></p>
+    <p class="tiny">The relay address is remembered on this device. The access key stays in this tab only and is never saved.</p>
+  </section>
+
+  <section id="viewer" class="panel hidden">
+    <div class="bar"><span id="dot" class="dot"></span><strong>LYNX Host</strong><span id="status" class="status">Connecting…</span></div>
+    <div class="bar">
+      <button id="btnKb">⌨ Keyboard</button>
+      <button id="btnFiles" class="secondary">📁 Files</button>
+      <select id="profile" title="Stream quality">
+        <option value="auto">Balanced (auto)</option>
+        <option value="low">Low latency</option>
+        <option value="high">High quality</option>
+      </select>
+      <span id="admin" class="badge">Admin: …</span>
+      <button id="btnAdmin" class="secondary hidden">Switch to admin</button>
+      <button id="fullscreen" class="secondary">Fullscreen</button>
+      <button id="disconnect" class="secondary">Disconnect</button>
+    </div>
+
+    <div id="screenWrap" class="screen-wrap" tabindex="0" aria-label="Remote Windows desktop. Click here to control the remote computer">
+      <canvas id="screen" class="screen hidden"></canvas>
+      <div id="placeholder" class="placeholder">Waiting for your Windows host to connect…</div>
+      <div id="overlay" class="overlay hidden"></div>
+    </div>
+    <div id="stats" class="tiny"></div>
+
+    <div id="kbBar" class="kbbar hidden">
+      <button data-k="Escape">Esc</button><button data-k="Tab">Tab</button>
+      <button data-m="ControlLeft">Ctrl</button><button data-m="AltLeft">Alt</button><button data-m="ShiftLeft">Shift</button><button data-m="MetaLeft">Win</button>
+      <button data-k="ArrowLeft">←</button><button data-k="ArrowUp">↑</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
+      <button data-k="Enter">Enter</button><button data-k="Backspace">⌫</button><button data-k="Delete">Del</button>
+      <button id="kbHide">Hide</button>
+    </div>
+
+    <section id="files" class="hidden">
+      <div class="crumbs">
+        <button id="fUp" class="secondary">⬆ Up</button>
+        <button id="fRefresh" class="secondary">⟳</button>
+        <button id="fUpload">⬆ Upload here</button>
+        <input id="fPick" type="file" multiple class="hidden">
+        <span id="fPath" class="path"></span>
+      </div>
+      <div id="fList" class="flist"></div>
+      <div id="xfers"></div>
+      <p id="fNote" class="tiny"></p>
+    </section>
+
+    <p class="tiny">Windows UAC prompts and the lock screen are drawn on a protected desktop that cannot be streamed or controlled; for programs that need administrator rights, run the host in admin mode. Ctrl+Alt+Delete is not supported. Only connect to your own host.</p>
+    <textarea id="kbInput" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" rows="1" aria-label="Remote keyboard input"></textarea>
+  </section>
 </main>
+<div id="toast" class="toast hidden"></div>
+
 <script>
-const $=id=>document.getElementById(id);let ws=null,prevUrl=null,authOk=false;const heldKeys=new Set();let keyboardCapture=false;const controlActive=()=>!$('viewer').classList.contains('hidden')&&authOk&&keyboardCapture;
-function showErr(t){$('error').textContent=t}
-function sendInput(message){if(authOk&&ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input',...message}))}
-function releaseAll(){for(const code of heldKeys)sendInput({action:'key_up',code});heldKeys.clear();sendInput({action:'release_all'})}
-function screenPoint(ev){const img=$('screen'),r=img.getBoundingClientRect(),nw=img.naturalWidth,nh=img.naturalHeight;if(!nw||!nh||!r.width||!r.height)return null;const scale=Math.min(r.width/nw,r.height/nh),w=nw*scale,h=nh*scale,ox=r.left+(r.width-w)/2,oy=r.top+(r.height-h)/2;return{x:Math.max(0,Math.min(1,(ev.clientX-ox)/w)),y:Math.max(0,Math.min(1,(ev.clientY-oy)/h))}}
-$('form').addEventListener('submit',e=>{e.preventDefault();showErr('');const relay=$('relay').value.trim(),key=$('key').value;if(!relay.startsWith('wss://')){showErr('Relay must use secure wss://');return}authOk=false;$('login').classList.add('hidden');$('viewer').classList.remove('hidden');$('status').textContent='Connecting to relay…';ws=new WebSocket(relay);ws.binaryType='arraybuffer';ws.onopen=()=>ws.send(JSON.stringify({role:'viewer',key}));ws.onmessage=ev=>{if(typeof ev.data==='string'){let m;try{m=JSON.parse(ev.data)}catch{return}if(m.type==='authenticated'){authOk=true;$('status').textContent=m.hostOnline?'Host online':'Waiting for host…'};if(m.type==='host')$('status').textContent=m.online?'Host online':'Host offline';if(m.type==='error')$('status').textContent=m.message||'Relay error';return}const blob=new Blob([ev.data],{type:'image/jpeg'}),url=URL.createObjectURL(blob);$('screen').src=url;$('screen').classList.remove('hidden');$('placeholder').classList.add('hidden');if(prevUrl)URL.revokeObjectURL(prevUrl);prevUrl=url};ws.onerror=()=>{$('status').textContent='Relay connection error'};ws.onclose=ev=>{authOk=false;releaseAll();$('status').textContent='Disconnected ('+ev.code+')'}});
-$('screenWrap').addEventListener('focus',()=>{keyboardCapture=true});$('screenWrap').addEventListener('blur',()=>{keyboardCapture=false;releaseAll()});
-$('screenWrap').addEventListener('pointerdown',ev=>{if(!authOk)return;ev.preventDefault();$('screenWrap').focus();const p=screenPoint(ev);if(p)sendInput({action:'mouse_move',...p});const b={0:'left',1:'middle',2:'right'}[ev.button];if(b)sendInput({action:'mouse_down',button:b});try{$('screenWrap').setPointerCapture(ev.pointerId)}catch{}});
-$('screenWrap').addEventListener('pointermove',ev=>{if(!authOk)return;const p=screenPoint(ev);if(p)sendInput({action:'mouse_move',...p})});
-function pointerUp(ev){const b={0:'left',1:'middle',2:'right'}[ev.button];if(b)sendInput({action:'mouse_up',button:b})}
-$('screenWrap').addEventListener('pointerup',pointerUp);$('screenWrap').addEventListener('pointercancel',()=>sendInput({action:'release_all'}));
-$('screenWrap').addEventListener('wheel',ev=>{if(!authOk)return;ev.preventDefault();sendInput({action:'wheel',delta_y:ev.deltaY})},{passive:false});$('screenWrap').addEventListener('contextmenu',ev=>ev.preventDefault());
-document.addEventListener('keydown',ev=>{if(controlActive()){if(ev.code==='Escape'&&document.fullscreenElement)return;ev.preventDefault();if(!heldKeys.has(ev.code)){heldKeys.add(ev.code);sendInput({action:'key_down',code:ev.code})}}});
-document.addEventListener('keyup',ev=>{if(controlActive()){ev.preventDefault();heldKeys.delete(ev.code);sendInput({action:'key_up',code:ev.code})}});
-window.addEventListener('blur',()=>{releaseAll();$('screenWrap').blur()});
-function disconnect(){releaseAll();if(ws){ws.close();ws=null}authOk=false;$('viewer').classList.add('hidden');$('login').classList.remove('hidden');if(prevUrl)URL.revokeObjectURL(prevUrl);prevUrl=null;$('screen').removeAttribute('src');$('screen').classList.add('hidden');$('placeholder').classList.remove('hidden')}
-$('disconnect').onclick=disconnect;$('fullscreen').onclick=()=>{const el=$('screenWrap');if(!document.fullscreenElement&&el.requestFullscreen)el.requestFullscreen().then(()=>el.focus()).catch(()=>{});else if(document.exitFullscreen)document.exitFullscreen().then(()=>el.focus()).catch(()=>{})};document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen'});
-</script></body></html>
+'use strict';
+const $ = id => document.getElementById(id);
+const S = { ws: null, url: '', key: '', authOk: false, manual: false, retry: 0, timer: null, lastRx: 0, hostInfo: null };
+const heldKeys = new Set();
+const mods = new Set();
+let keyboardCapture = false;
+let rttMs = null, frames = 0, frameBytes = 0;
+let profile = 'auto';
+try { profile = localStorage.getItem('lynx_profile') || 'auto'; $('relay').value = localStorage.getItem('lynx_relay') || ''; } catch (e) {}
+$('profile').value = profile;
+
+/* ---------------- small helpers ---------------- */
+function toast(msg, level) {
+  const t = $('toast'); t.textContent = msg; t.className = 'toast ' + (level || '');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 5000);
+}
+function setStatus(text, cls) { $('status').textContent = text; $('dot').className = 'dot ' + (cls || ''); }
+function showOverlay(text) { const o = $('overlay'); if (text) { o.textContent = text; o.classList.remove('hidden'); } else o.classList.add('hidden'); }
+function wsSend(data) { const ws = S.ws; if (ws && ws.readyState === WebSocket.OPEN) { ws.send(data); return true; } return false; }
+function sendInput(m) { if (S.authOk) wsSend(JSON.stringify({ type: 'input', ...m })); }
+function sendFile(m) { return S.authOk ? wsSend(JSON.stringify({ type: 'file', ...m })) : false; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------------- connection (auto-reconnect, heartbeat watchdog) ---------------- */
+$('form').addEventListener('submit', e => {
+  e.preventDefault(); $('error').textContent = '';
+  const relay = $('relay').value.trim(), key = $('key').value;
+  if (!relay.startsWith('wss://')) { $('error').textContent = 'Relay must use secure wss://'; return; }
+  try { localStorage.setItem('lynx_relay', relay); } catch (e) {}
+  S.url = relay; S.key = key; S.manual = false; S.retry = 0;
+  $('login').classList.add('hidden'); $('viewer').classList.remove('hidden');
+  connect();
+});
+
+function connect() {
+  clearTimeout(S.timer);
+  const old = S.ws; S.ws = null; if (old) { try { old.close(); } catch (e) {} }
+  setStatus('Connecting…', 'warn');
+  let ws;
+  try { ws = new WebSocket(S.url); } catch (e) { scheduleReconnect(); return; }
+  S.ws = ws; S.authOk = false; S.lastRx = Date.now(); ws.binaryType = 'arraybuffer';
+  ws.onopen = () => ws.send(JSON.stringify({ role: 'viewer', key: S.key }));
+  ws.onmessage = onMessage;
+  ws.onerror = () => {};
+  ws.onclose = ev => {
+    if (S.ws !== ws) return;            // an older socket we already replaced
+    teardown();
+    if (S.manual) return;
+    if (ev.code === 4403 || ev.code === 4401) { stopToLogin('Access denied. Check the relay address and access key.'); return; }
+    if (ev.code === 1006 && S.retry >= 3 && !S.everAuthed) { stopToLogin('Could not reach the relay (or this device is temporarily blocked after wrong keys).'); return; }
+    scheduleReconnect();
+  };
+}
+function teardown() {
+  S.authOk = false;
+  heldKeys.clear(); mods.clear(); updateModButtons();
+  for (const t of T.values()) if (!t.finished && !t.err) { t.err = 'Disconnected'; wake(t); abortWritable(t); }
+  renderX();
+}
+function scheduleReconnect() {
+  clearTimeout(S.timer);
+  const delay = Math.min(10000, 500 * Math.pow(2, S.retry++));
+  setStatus('Connection lost — reconnecting…', 'bad'); showOverlay('Reconnecting…');
+  S.timer = setTimeout(connect, delay);
+}
+function stopToLogin(msg) {
+  S.manual = true; clearTimeout(S.timer); S.everAuthed = false;
+  const ws = S.ws; S.ws = null; if (ws) { try { ws.close(); } catch (e) {} }
+  teardown(); resetScreen();
+  $('viewer').classList.add('hidden'); $('login').classList.remove('hidden'); $('error').textContent = msg || '';
+}
+function forceReconnect() { if (S.manual || !S.url) return; S.retry = 0; teardown(); connect(); }
+function resetScreen() { pendingFrame = null; $('screen').classList.add('hidden'); $('placeholder').classList.remove('hidden'); showOverlay(''); }
+
+// Watchdog: the relay sends a heartbeat every 5 s. Silence = half-dead socket (very common on phones).
+setInterval(() => {
+  if (S.manual || !S.url || !S.ws) return;
+  const silent = Date.now() - S.lastRx;
+  if (silent > 15000) { forceReconnect(); }
+}, 3000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !S.manual && S.url && Date.now() - S.lastRx > 7000) forceReconnect();
+});
+window.addEventListener('online', () => { if (!S.manual && S.url) forceReconnect(); });
+setInterval(() => { if (S.authOk) wsSend(JSON.stringify({ type: 'ping', t: performance.now() })); }, 3000);
+setInterval(() => {
+  const mbps = frameBytes * 8 / 2 / 1e6;
+  $('stats').textContent = S.authOk ? `${rttMs == null ? '–' : rttMs + ' ms'} · ${(frames / 2).toFixed(0)} fps · ${mbps.toFixed(1)} Mbps` : '';
+  frames = 0; frameBytes = 0;
+}, 2000);
+
+function onMessage(ev) {
+  S.lastRx = Date.now();
+  if (typeof ev.data === 'string') { onText(ev.data); return; }
+  const u8 = new Uint8Array(ev.data);
+  if (!u8.length) return;
+  if (u8[0] === 1) { frameBytes += u8.length; showFrame(ev.data); }
+  else if (u8[0] === 2) onDownloadChunk(u8);
+}
+
+function onText(str) {
+  let m; try { m = JSON.parse(str); } catch (e) { return; }
+  switch (m.type) {
+    case 'authenticated':
+      S.authOk = true; S.retry = 0; S.everAuthed = true;
+      setStatus(m.hostOnline ? 'Host online' : 'Waiting for host…', m.hostOnline ? 'ok' : 'warn');
+      showOverlay(m.hostOnline ? '' : 'Waiting for the host to come online…');
+      sendInput({ action: 'set_profile', profile });
+      if (!$('files').classList.contains('hidden')) listDir(F.path);
+      break;
+    case 'host':
+      setStatus(m.online ? 'Host online' : 'Host offline', m.online ? 'ok' : 'warn');
+      showOverlay(m.online ? '' : 'Host offline — waiting for it to come back…');
+      break;
+    case 'pong': rttMs = Math.round(performance.now() - m.t); break;
+    case 'host_info': onHostInfo(m); break;
+    case 'notice': toast(m.message, m.level === 'info' ? '' : m.level); break;
+    case 'file_list': onFileList(m); break;
+    case 'file_ready': { const t = T.get(m.id); if (t) { t.ready = true; wake(t); } break; }
+    case 'file_ack': { const t = T.get(m.id); if (t) { t.acked = m.received; t.done = m.received; wake(t); renderX(); } break; }
+    case 'file_begin': { const t = T.get(m.id); if (t) { t.size = m.size; t.state = 'downloading'; t.start = performance.now(); renderX(); } break; }
+    case 'file_done': onFileDone(m); break;
+    case 'file_error': onFileError(m); break;
+  }
+}
+
+/* ---------------- screen rendering (latest frame only, no flicker) ---------------- */
+const canvas = $('screen'), ctx = canvas.getContext('2d');
+let pendingFrame = null, decoding = false;
+function showFrame(buf) { pendingFrame = buf; if (!decoding) decodeLoop(); }
+async function decodeLoop() {
+  decoding = true;
+  while (pendingFrame) {
+    const buf = pendingFrame; pendingFrame = null;
+    try {
+      const blob = new Blob([new Uint8Array(buf, 1)], { type: 'image/jpeg' });
+      if (window.createImageBitmap) { const bmp = await createImageBitmap(blob); draw(bmp, bmp.width, bmp.height); if (bmp.close) bmp.close(); }
+      else await drawViaImg(blob);
+    } catch (e) { /* a corrupt frame is skipped */ }
+  }
+  decoding = false;
+}
+function drawViaImg(blob) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => { draw(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url); res(); };
+    img.onerror = () => { URL.revokeObjectURL(url); res(); };
+    img.src = url;
+  });
+}
+function draw(src, w, h) {
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.drawImage(src, 0, 0);
+  if (canvas.classList.contains('hidden')) { canvas.classList.remove('hidden'); $('placeholder').classList.add('hidden'); }
+  frames++;
+}
+
+/* ---------------- mouse / touch ---------------- */
+function screenPoint(ev) {
+  const r = canvas.getBoundingClientRect(), nw = canvas.width, nh = canvas.height;
+  if (!nw || !nh || !r.width || !r.height) return null;
+  const scale = Math.min(r.width / nw, r.height / nh), w = nw * scale, h = nh * scale;
+  const ox = r.left + (r.width - w) / 2, oy = r.top + (r.height - h) / 2;
+  return { x: Math.max(0, Math.min(1, (ev.clientX - ox) / w)), y: Math.max(0, Math.min(1, (ev.clientY - oy) / h)) };
+}
+let movePt = null, moveRaf = 0;
+function queueMove(p) {
+  movePt = p;
+  if (!moveRaf) moveRaf = requestAnimationFrame(() => { moveRaf = 0; if (movePt) { sendInput({ action: 'mouse_move', ...movePt }); movePt = null; } });
+}
+const BTN = { 0: 'left', 1: 'middle', 2: 'right' };
+const wrap = $('screenWrap');
+wrap.addEventListener('focus', () => { keyboardCapture = true; });
+wrap.addEventListener('blur', () => { keyboardCapture = false; releaseAll(); });
+wrap.addEventListener('pointerdown', ev => {
+  if (!S.authOk) return;
+  ev.preventDefault(); wrap.focus();
+  const p = screenPoint(ev); if (p) sendInput({ action: 'mouse_move', ...p });
+  const b = BTN[ev.button]; if (b) sendInput({ action: 'mouse_down', button: b });
+  try { wrap.setPointerCapture(ev.pointerId); } catch (e) {}
+});
+wrap.addEventListener('pointermove', ev => { if (!S.authOk) return; const p = screenPoint(ev); if (p) queueMove(p); });
+wrap.addEventListener('pointerup', ev => { const b = BTN[ev.button]; if (b) sendInput({ action: 'mouse_up', button: b }); });
+wrap.addEventListener('pointercancel', () => sendInput({ action: 'release_all' }));
+wrap.addEventListener('wheel', ev => { if (!S.authOk) return; ev.preventDefault(); sendInput({ action: 'wheel', delta_y: ev.deltaY }); }, { passive: false });
+wrap.addEventListener('contextmenu', ev => ev.preventDefault());
+
+/* ---------------- physical keyboard ---------------- */
+const controlActive = () => !$('viewer').classList.contains('hidden') && S.authOk && keyboardCapture;
+function releaseAll() { for (const code of heldKeys) sendInput({ action: 'key_up', code }); heldKeys.clear(); sendInput({ action: 'release_all' }); }
+document.addEventListener('keydown', ev => {
+  if (!controlActive()) return;
+  if (ev.code === 'Escape' && document.fullscreenElement) return;
+  ev.preventDefault();
+  if (!heldKeys.has(ev.code)) { heldKeys.add(ev.code); sendInput({ action: 'key_down', code: ev.code }); }
+});
+document.addEventListener('keyup', ev => { if (!controlActive()) return; ev.preventDefault(); heldKeys.delete(ev.code); sendInput({ action: 'key_up', code: ev.code }); });
+window.addEventListener('blur', () => { releaseAll(); });
+
+/* ---------------- mobile / on-screen keyboard ---------------- */
+const kb = $('kbInput'), SENT = '\u200b\u200b\u200b\u200b';
+function updateModButtons() { document.querySelectorAll('#kbBar [data-m]').forEach(b => b.classList.toggle('on', mods.has(b.dataset.m))); }
+function tapKey(code) {
+  const m = [...mods];
+  m.forEach(c => sendInput({ action: 'key_down', code: c }));
+  sendInput({ action: 'key_tap', code });
+  m.forEach(c => sendInput({ action: 'key_up', code: c }));
+  if (m.length) { mods.clear(); updateModButtons(); }
+}
+function charToCode(ch) {
+  if (/[a-z]/i.test(ch)) return 'Key' + ch.toUpperCase();
+  if (/[0-9]/.test(ch)) return 'Digit' + ch;
+  if (ch === ' ') return 'Space';
+  return ({ '-': 'Minus', '=': 'Equal', ',': 'Comma', '.': 'Period', '/': 'Slash', ';': 'Semicolon', "'": 'Quote', '[': 'BracketLeft', ']': 'BracketRight', '\\': 'Backslash', '`': 'Backquote' })[ch] || null;
+}
+function typeText(text) {
+  let run = '';
+  const flush = () => { if (run) { sendInput({ action: 'text', text: run }); run = ''; } };
+  for (const ch of text) {
+    if (ch === '\n') { flush(); tapKey('Enter'); continue; }
+    if (ch === '\t') { flush(); tapKey('Tab'); continue; }
+    if (mods.size) { const code = charToCode(ch); if (code) { flush(); tapKey(code); continue; } }
+    run += ch;
+  }
+  flush();
+}
+function resetKb() { kb.value = SENT; try { kb.setSelectionRange(SENT.length, SENT.length); } catch (e) {} }
+function flushKb() {
+  const v = kb.value;
+  if (v.length > SENT.length) typeText(v.slice(SENT.length));
+  else if (v.length < SENT.length) for (let i = 0; i < SENT.length - v.length; i++) tapKey('Backspace');
+  resetKb();
+}
+function openKeyboard() { $('kbBar').classList.remove('hidden'); $('btnKb').classList.add('on'); kb.style.pointerEvents = 'auto'; resetKb(); kb.focus(); }
+function hideKeyboard() { kb.blur(); kb.style.pointerEvents = 'none'; $('kbBar').classList.add('hidden'); $('btnKb').classList.remove('on'); mods.clear(); updateModButtons(); }
+$('btnKb').onclick = () => { if ($('kbBar').classList.contains('hidden') || document.activeElement !== kb) openKeyboard(); else hideKeyboard(); };
+kb.addEventListener('input', e => { if (e.isComposing) return; flushKb(); });
+kb.addEventListener('compositionend', () => flushKb());
+kb.addEventListener('keydown', e => {
+  if (e.isComposing || e.keyCode === 229) return;       // virtual keyboards: handled by the input event
+  const map = { Enter: 'Enter', Backspace: 'Backspace', Tab: 'Tab', Escape: 'Escape', Delete: 'Delete', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight' };
+  if (map[e.key]) { e.preventDefault(); tapKey(map[e.key]); }
+});
+$('kbBar').addEventListener('mousedown', e => e.preventDefault());
+$('kbBar').addEventListener('pointerdown', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  e.preventDefault();
+  if (b.id === 'kbHide') { hideKeyboard(); return; }
+  if (b.dataset.m) { mods.has(b.dataset.m) ? mods.delete(b.dataset.m) : mods.add(b.dataset.m); updateModButtons(); }
+  else if (b.dataset.k) tapKey(b.dataset.k);
+  if (document.activeElement !== kb) kb.focus();
+});
+
+/* ---------------- quality / admin / fullscreen / disconnect ---------------- */
+$('profile').onchange = () => { profile = $('profile').value; try { localStorage.setItem('lynx_profile', profile); } catch (e) {} sendInput({ action: 'set_profile', profile }); };
+function onHostInfo(m) {
+  S.hostInfo = m;
+  const b = $('admin'); b.textContent = m.elevated ? 'Admin: on' : 'Admin: off'; b.className = 'badge' + (m.elevated ? ' admin' : '');
+  $('btnAdmin').classList.toggle('hidden', !!m.elevated);
+  $('fNote').textContent = `Shared folder on the host: ${m.share_dir || ''} · uploads up to ${m.max_upload_gb || '?'} GB.`;
+}
+$('btnAdmin').onclick = () => {
+  if (confirm('Restart LYNX on the laptop in administrator mode? The screen reconnects in a few seconds.')) sendInput({ action: 'request_admin' });
+};
+$('fullscreen').onclick = () => {
+  const el = wrap;
+  if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().then(() => el.focus()).catch(() => {});
+  else if (document.exitFullscreen) document.exitFullscreen().then(() => el.focus()).catch(() => {});
+};
+document.addEventListener('fullscreenchange', () => { $('fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; });
+$('disconnect').onclick = () => { S.manual = true; releaseAll(); stopToLogin(''); };
+
+/* ---------------- file manager ---------------- */
+const F = { path: '' };
+const T = new Map();           // transfers by id
+let nextId = 1;
+const fmtSize = n => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 2 : 1) : n) + ' ' + u[i]; };
+const fmtDate = s => s ? new Date(s * 1000).toLocaleDateString() : '';
+function wake(t) { if (t.wake) { const w = t.wake; t.wake = null; w(); } }
+function waitT(t, ms) { return new Promise(r => { t.wake = r; setTimeout(r, ms); }); }
+function joinPath(a, b) { return a ? a + '/' + b : b; }
+
+$('btnFiles').onclick = () => { const f = $('files'); f.classList.toggle('hidden'); if (!f.classList.contains('hidden')) listDir(F.path); };
+$('fRefresh').onclick = () => listDir(F.path);
+$('fUp').onclick = () => listDir(F.path.split('/').slice(0, -1).join('/'));
+$('fUpload').onclick = () => $('fPick').click();
+$('fPick').onchange = () => { for (const f of $('fPick').files) { upQueue.push({ file: f, dir: F.path }); } $('fPick').value = ''; runUploads(); };
+function listDir(p) { F.path = p || ''; if (!sendFile({ op: 'list', path: F.path })) toast('Not connected', 'warn'); }
+function onFileList(m) {
+  F.path = m.path || '';
+  $('fPath').textContent = '/' + F.path;
+  const box = $('fList'); box.textContent = '';
+  if (!m.entries.length) { const d = document.createElement('div'); d.className = 'row muted'; d.textContent = 'This folder is empty.'; box.appendChild(d); }
+  for (const e of m.entries) {
+    const row = document.createElement('div'); row.className = 'row';
+    const name = document.createElement('div'); name.className = 'name' + (e.dir ? ' dir' : ''); name.textContent = (e.dir ? '📁 ' : '📄 ') + e.name;
+    const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = (e.dir ? '' : fmtSize(e.size) + ' · ') + fmtDate(e.mtime);
+    row.append(name, meta);
+    if (e.dir) name.onclick = () => listDir(joinPath(F.path, e.name));
+    else { const b = document.createElement('button'); b.className = 'secondary'; b.textContent = '⬇'; b.title = 'Download'; b.onclick = () => downloadOne(joinPath(F.path, e.name), e.name, e.size); row.appendChild(b); }
+    box.appendChild(row);
+  }
+}
+let xRaf = 0;
+function renderX() {
+  if (xRaf) return;
+  xRaf = setTimeout(() => {
+    xRaf = 0;
+    const box = $('xfers'); box.textContent = '';
+    for (const t of T.values()) {
+      const el = document.createElement('div'); el.className = 'xfer' + (t.err ? ' err' : t.finished ? ' done' : '');
+      const top = document.createElement('div'); top.className = 'top';
+      const nm = document.createElement('span'); nm.textContent = (t.kind === 'up' ? '⬆ ' : '⬇ ') + t.name;
+      const st = document.createElement('span'); st.className = 'muted';
+      const pct = t.size ? Math.min(100, Math.round(t.done / t.size * 100)) : (t.finished ? 100 : 0);
+      st.textContent = t.err ? t.err : t.cancel ? 'Canceled' : t.finished ? 'Done' : t.state === 'starting' ? 'Starting…' : pct + '%';
+      top.append(nm, st);
+      const bar = document.createElement('div'); bar.className = 'bar2'; const inner = document.createElement('div'); inner.style.width = pct + '%'; bar.appendChild(inner);
+      const meta = document.createElement('div'); meta.className = 'tiny';
+      const secs = (performance.now() - t.start) / 1000;
+      meta.textContent = fmtSize(t.done) + ' / ' + fmtSize(t.size || 0) + (!t.finished && !t.err && secs > 0.5 ? ' · ' + fmtSize(t.done / secs) + '/s' : '');
+      el.append(top, bar, meta);
+      if (!t.finished && !t.err && !t.cancel) { const c = document.createElement('button'); c.className = 'secondary'; c.textContent = 'Cancel'; c.onclick = () => cancelT(t); el.appendChild(c); }
+      box.appendChild(el);
+    }
+  }, 150);
+}
+function cancelT(t) { t.cancel = true; t.state = 'canceled'; sendFile({ op: 'cancel', id: t.id }); wake(t); abortWritable(t); finish(t); }
+function abortWritable(t) { if (t.writable) { try { t.writable.abort(); } catch (e) {} t.writable = null; } }
+function finish(t) {
+  if (t.err && !t.cancel) { sendFile({ op: 'cancel', id: t.id }); abortWritable(t); toast(t.name + ': ' + t.err, 'error'); }
+  renderX();
+  if (t.finished && t.kind === 'up') listDir(F.path);
+  setTimeout(() => { if (T.get(t.id) === t && (t.finished || t.cancel)) { T.delete(t.id); renderX(); } }, 10000);
+  setTimeout(() => { if (T.get(t.id) === t) { T.delete(t.id); renderX(); } }, 40000);
+}
+function onFileError(m) {
+  const t = T.get(m.id);
+  if (!t) { toast(m.message, 'warn'); return; }
+  t.err = m.message; wake(t); abortWritable(t); finish(t);
+}
+
+// ---- uploads (sequential queue, windowed with acknowledgements)
+const upQueue = []; let upBusy = false;
+async function runUploads() { if (upBusy) return; upBusy = true; while (upQueue.length) { const j = upQueue.shift(); await uploadOne(j.file, j.dir); } upBusy = false; }
+async function uploadOne(file, dir) {
+  const id = nextId++;
+  const t = { id, kind: 'up', name: file.name, size: file.size, done: 0, acked: 0, start: performance.now(), state: 'starting', cancel: false, wake: null, ready: false, finished: false, err: '' };
+  T.set(id, t); renderX();
+  if (!sendFile({ op: 'upload_begin', id, name: file.name, size: file.size, dir })) { t.err = 'Not connected'; finish(t); return; }
+  const t0 = Date.now();
+  while (!t.ready && !t.err && !t.cancel) { await waitT(t, 500); if (!S.authOk) t.err = 'Disconnected'; else if (Date.now() - t0 > 15000) t.err = 'Host did not respond'; }
+  if (t.err || t.cancel) { if (!t.cancel) finish(t); return; }
+  t.state = 'uploading'; t.start = performance.now();
+  const CH = 256 * 1024, WIN = 6; let off = 0;
+  while (off < file.size && !t.cancel && !t.err) {
+    if (!S.authOk) { t.err = 'Disconnected'; break; }
+    if (off - t.acked >= WIN * CH || (S.ws && S.ws.bufferedAmount > 4 * 1024 * 1024)) { await waitT(t, 1000); continue; }
+    const buf = await file.slice(off, off + CH).arrayBuffer();
+    const out = new Uint8Array(5 + buf.byteLength); out[0] = 3; new DataView(out.buffer).setUint32(1, id); out.set(new Uint8Array(buf), 5);
+    if (!wsSend(out)) { t.err = 'Disconnected'; break; }
+    off += buf.byteLength;
+  }
+  let stallFrom = Date.now();
+  while (!t.err && !t.cancel && t.acked < file.size) {
+    const a = t.acked; await waitT(t, 1000);
+    if (t.acked !== a) stallFrom = Date.now(); else if (Date.now() - stallFrom > 30000) t.err = 'Transfer stalled';
+    if (!S.authOk) t.err = 'Disconnected';
+  }
+  if (!t.err && !t.cancel) {
+    sendFile({ op: 'upload_end', id });
+    const t1 = Date.now();
+    while (!t.finished && !t.err && !t.cancel && Date.now() - t1 < 15000) await waitT(t, 500);
+    if (!t.finished && !t.err && !t.cancel) t.err = 'No confirmation from the host';
+  }
+  if (!t.cancel) finish(t);
+}
+
+// ---- downloads (streamed straight to disk where the browser allows it)
+async function downloadOne(path, name, size) {
+  const id = nextId++;
+  const t = { id, kind: 'down', name, size, done: 0, start: performance.now(), state: 'starting', cancel: false, wake: null, err: '', parts: [], writable: null, chain: Promise.resolve(), finished: false };
+  if (window.showSaveFilePicker) {
+    try { const h = await window.showSaveFilePicker({ suggestedName: name }); t.writable = await h.createWritable(); }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  if (!t.writable && size > 1.5 * 1024 * 1024 * 1024) { toast('This browser cannot stream files over 1.5 GB to disk. Use Chrome or Edge on a computer.', 'error'); return; }
+  T.set(id, t); renderX();
+  if (!sendFile({ op: 'download', id, path })) { t.err = 'Not connected'; finish(t); }
+}
+function onDownloadChunk(u8) {
+  const id = new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(1);
+  const t = T.get(id); if (!t || t.kind !== 'down' || t.cancel || t.err) return;
+  const chunk = u8.subarray(5); t.done += chunk.length; const got = t.done;
+  if (t.writable) {
+    t.chain = t.chain.then(() => t.writable && t.writable.write(chunk)).then(() => { sendFile({ op: 'ack', id, received: got }); })
+      .catch(() => { t.err = 'Could not write the file to disk'; sendFile({ op: 'cancel', id }); finish(t); });
+  } else { t.parts.push(chunk.slice()); sendFile({ op: 'ack', id, received: got }); }
+  renderX();
+}
+function onFileDone(m) {
+  const t = T.get(m.id); if (!t) return;
+  if (t.kind === 'up') { t.finished = true; t.done = t.size; wake(t); renderX(); return; }
+  t.chain.then(async () => {
+    if (t.err) return;
+    if (t.size && t.done !== t.size) { t.err = 'Download incomplete'; finish(t); return; }
+    if (t.writable) { await t.writable.close(); t.writable = null; }
+    else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(t.parts)); a.download = t.name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); t.parts = [];
+    }
+    t.finished = true; t.done = t.size; finish(t);
+  }).catch(() => { t.err = 'Could not save the file'; finish(t); });
+}
+</script>
+</body>
+</html>
