@@ -76,7 +76,7 @@ button:disabled{opacity:.5}
   </section>
 
   <section id="viewer" class="panel hidden">
-    <div class="bar"><span id="dot" class="dot"></span><strong>LYNX Host</strong><span id="status" class="status">Connecting…</span></div>
+    <div class="bar"><span id="dot" class="dot"></span><strong>LYNX</strong><span id="status" class="status">Connecting…</span><label class="tiny" for="deviceSelect">Device</label><select id="deviceSelect" aria-label="Choose connected device"><option value="">No devices online</option></select></div>
     <div class="bar">
       <button id="btnFiles" class="secondary">📁 Files</button>
       <button id="btnControl" class="on" title="Pause or resume remote mouse and keyboard">Controls: On</button>
@@ -120,7 +120,7 @@ button:disabled{opacity:.5}
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const S = { ws: null, url: '', key: '', authOk: false, manual: false, retry: 0, timer: null, lastRx: 0, hostInfo: null };
+const S = { ws: null, url: '', key: '', authOk: false, manual: false, retry: 0, timer: null, lastRx: 0, hostInfo: null, devices: [], selectedDeviceId: null };
 const heldKeys = new Set();
 let keyboardCapture = false;
 let inputEnabled = true;
@@ -141,6 +141,7 @@ const CONTROL_ACTIONS = new Set(['mouse_move','mouse_down','mouse_up','wheel','k
 function sendInput(m) { if (!S.authOk) return; if (!inputEnabled && CONTROL_ACTIONS.has(m.action)) return; wsSend(JSON.stringify({ type: 'input', ...m })); }
 function setInputEnabled(enabled) { inputEnabled = !!enabled; $('btnControl').textContent = inputEnabled ? 'Controls: On' : 'Controls: Paused'; $('btnControl').classList.toggle('on', inputEnabled); $('btnControl').classList.toggle('secondary', !inputEnabled); $('btnControl').setAttribute('aria-pressed', String(inputEnabled)); if (!inputEnabled) { releaseAll(); keyboardCapture = false; wrap.blur(); kb.blur(); toast('Remote mouse and keyboard paused. Screen and files remain available.'); } else { toast('Remote mouse and keyboard resumed. Tap the screen to control.'); } }
 $('btnControl').onclick = () => setInputEnabled(!inputEnabled);
+$('deviceSelect').onchange = () => { const id = $('deviceSelect').value || null; S.selectedDeviceId = id; resetScreen(); S.hostInfo = { online: false }; setStatus('Switching device…', 'warn'); showOverlay('Connecting to selected device…'); if (S.authOk) wsSend(JSON.stringify({ type: 'select_device', deviceId: id || '' })); };
 function sendFile(m) { return S.authOk ? wsSend(JSON.stringify({ type: 'file', ...m })) : false; }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -225,16 +226,24 @@ function onText(str) {
   let m; try { m = JSON.parse(str); } catch (e) { return; }
   switch (m.type) {
     case 'authenticated':
-      S.authOk = true; S.retry = 0; S.everAuthed = true; S.hostInfo = { online: !!m.hostOnline }; if (m.hostOnline) lastFrameAt = Date.now();
-      setStatus(m.hostOnline ? 'Host online' : 'Waiting for host…', m.hostOnline ? 'ok' : 'warn');
-      showOverlay(m.hostOnline ? '' : 'Waiting for the host to come online…');
+      S.authOk = true; S.retry = 0; S.everAuthed = true; S.selectedDeviceId = m.deviceId || null; S.hostInfo = { online: !!m.hostOnline }; if (m.hostOnline) lastFrameAt = Date.now();
+      setStatus(m.hostOnline ? 'Device online' : 'Waiting for a device…', m.hostOnline ? 'ok' : 'warn');
+      showOverlay(m.hostOnline ? '' : 'Waiting for a host device to connect…');
       sendInput({ action: 'set_profile', profile });
       if (!$('files').classList.contains('hidden')) listDir(F.path);
       break;
+    case 'devices': updateDeviceList(m.devices || []); break;
+    case 'device_selected':
+      S.selectedDeviceId = m.deviceId || null; $('deviceSelect').value = S.selectedDeviceId || '';
+      S.hostInfo = { online: !!m.online };
+      setStatus(m.online ? `Connected: ${m.name || 'device'}` : 'Selected device offline', m.online ? 'ok' : 'warn');
+      showOverlay(m.online ? '' : 'Selected device is offline or unavailable.');
+      if (m.online) sendInput({ action: 'set_profile', profile });
+      break;
     case 'host':
       S.hostInfo = S.hostInfo || {}; S.hostInfo.online = !!m.online;
-      setStatus(m.online ? 'Host online' : 'Host offline', m.online ? 'ok' : 'warn');
-      showOverlay(m.online ? '' : 'Host offline — waiting for it to come back…');
+      setStatus(m.online ? 'Device online' : 'Device offline', m.online ? 'ok' : 'warn');
+      showOverlay(m.online ? '' : 'Device offline — waiting for it to reconnect…');
       if (m.online) sendInput({ action: 'set_profile', profile });
       break;
     case 'pong': rttMs = Math.round(performance.now() - m.t); break;
@@ -247,6 +256,17 @@ function onText(str) {
     case 'file_done': onFileDone(m); break;
     case 'file_error': onFileError(m); break;
   }
+}
+
+function updateDeviceList(devices) {
+  S.devices = Array.isArray(devices) ? devices : [];
+  const sel = $('deviceSelect'), previous = S.selectedDeviceId || sel.value;
+  sel.replaceChildren();
+  if (!S.devices.length) { const o = document.createElement('option'); o.value = ''; o.textContent = 'No devices online'; sel.append(o); sel.value = ''; return; }
+  for (const d of S.devices) { const o = document.createElement('option'); o.value = d.id; o.textContent = `${d.name || d.id} · ${d.online ? 'Online' : 'Offline'}`; sel.append(o); }
+  if (previous && S.devices.some(d => d.id === previous)) sel.value = previous;
+  else if (S.devices.length) sel.value = S.devices[0].id;
+  if (sel.value && sel.value !== S.selectedDeviceId) { S.selectedDeviceId = sel.value; if (S.authOk) { resetScreen(); wsSend(JSON.stringify({ type: 'select_device', deviceId: sel.value })); } }
 }
 
 /* ---------------- screen rendering (latest frame only, no flicker) ---------------- */
