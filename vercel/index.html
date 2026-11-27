@@ -67,8 +67,8 @@ button:disabled{opacity:.5}
     <h2>Connect to your host</h2>
     <p class="muted">Enter your relay address and private access key.</p>
     <form id="form">
-      <label class="field">Relay WebSocket URL<input id="relay" type="url" placeholder="wss://your-relay.onrender.com/ws" required></label>
-      <label class="field">Access key<input id="key" type="password" autocomplete="current-password" required minlength="24"></label>
+      <label class="field">Relay WebSocket URL<input id="relay" type="url" value="wss://mika0-1-backend.onrender.com/ws" required></label>
+      <label class="field">Access key<input id="key" type="password" autocomplete="current-password" value="000000000000000000000000" required minlength="24"></label>
       <button class="full" type="submit">Connect securely</button>
     </form>
     <p id="error" class="error"></p>
@@ -79,6 +79,7 @@ button:disabled{opacity:.5}
     <div class="bar"><span id="dot" class="dot"></span><strong>LYNX Host</strong><span id="status" class="status">Connecting…</span></div>
     <div class="bar">
       <button id="btnFiles" class="secondary">📁 Files</button>
+      <button id="btnControl" class="on" title="Pause or resume remote mouse and keyboard">Controls: On</button>
       <select id="profile" title="Stream quality">
         <option value="auto">Balanced (auto)</option>
         <option value="low">Low latency</option>
@@ -122,9 +123,10 @@ const $ = id => document.getElementById(id);
 const S = { ws: null, url: '', key: '', authOk: false, manual: false, retry: 0, timer: null, lastRx: 0, hostInfo: null };
 const heldKeys = new Set();
 let keyboardCapture = false;
+let inputEnabled = true;
 let rttMs = null, frames = 0, frameBytes = 0;
 let profile = 'auto';
-try { profile = localStorage.getItem('lynx_profile') || 'auto'; $('relay').value = localStorage.getItem('lynx_relay') || ''; } catch (e) {}
+try { profile = localStorage.getItem('lynx_profile') || 'auto'; $('relay').value = localStorage.getItem('lynx_relay') || 'wss://mika0-1-backend.onrender.com/ws'; } catch (e) {}
 $('profile').value = profile;
 
 /* ---------------- small helpers ---------------- */
@@ -135,7 +137,10 @@ function toast(msg, level) {
 function setStatus(text, cls) { $('status').textContent = text; $('dot').className = 'dot ' + (cls || ''); }
 function showOverlay(text) { const o = $('overlay'); if (text) { o.textContent = text; o.classList.remove('hidden'); } else o.classList.add('hidden'); }
 function wsSend(data) { const ws = S.ws; if (ws && ws.readyState === WebSocket.OPEN) { ws.send(data); return true; } return false; }
-function sendInput(m) { if (S.authOk) wsSend(JSON.stringify({ type: 'input', ...m })); }
+const CONTROL_ACTIONS = new Set(['mouse_move','mouse_down','mouse_up','wheel','key_down','key_up','key_tap','text']);
+function sendInput(m) { if (!S.authOk) return; if (!inputEnabled && CONTROL_ACTIONS.has(m.action)) return; wsSend(JSON.stringify({ type: 'input', ...m })); }
+function setInputEnabled(enabled) { inputEnabled = !!enabled; $('btnControl').textContent = inputEnabled ? 'Controls: On' : 'Controls: Paused'; $('btnControl').classList.toggle('on', inputEnabled); $('btnControl').classList.toggle('secondary', !inputEnabled); $('btnControl').setAttribute('aria-pressed', String(inputEnabled)); if (!inputEnabled) { releaseAll(); keyboardCapture = false; wrap.blur(); kb.blur(); toast('Remote mouse and keyboard paused. Screen and files remain available.'); } else { toast('Remote mouse and keyboard resumed. Tap the screen to control.'); } }
+$('btnControl').onclick = () => setInputEnabled(!inputEnabled);
 function sendFile(m) { return S.authOk ? wsSend(JSON.stringify({ type: 'file', ...m })) : false; }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -304,21 +309,21 @@ const wrap = $('screenWrap');
 wrap.addEventListener('focus', () => { keyboardCapture = true; });
 wrap.addEventListener('blur', () => { keyboardCapture = false; releaseAll(); });
 wrap.addEventListener('pointerdown', ev => {
-  if (!S.authOk) return;
+  if (!S.authOk || !inputEnabled) return;
   ev.preventDefault(); wrap.focus();
   const p = screenPoint(ev); if (p) sendInput({ action: 'mouse_move', ...p });
   const b = BTN[ev.button]; if (b) sendInput({ action: 'mouse_down', button: b });
   try { wrap.setPointerCapture(ev.pointerId); } catch (e) {}
   if (isTouchMobile) openNativeKeyboard();
 });
-wrap.addEventListener('pointermove', ev => { if (!S.authOk) return; const p = screenPoint(ev); if (p) queueMove(p); });
-wrap.addEventListener('pointerup', ev => { const b = BTN[ev.button]; if (b) sendInput({ action: 'mouse_up', button: b }); });
+wrap.addEventListener('pointermove', ev => { if (!S.authOk || !inputEnabled) return; const p = screenPoint(ev); if (p) queueMove(p); });
+wrap.addEventListener('pointerup', ev => { if (!inputEnabled) return; const b = BTN[ev.button]; if (b) sendInput({ action: 'mouse_up', button: b }); });
 wrap.addEventListener('pointercancel', () => sendInput({ action: 'release_all' }));
-wrap.addEventListener('wheel', ev => { if (!S.authOk) return; ev.preventDefault(); sendInput({ action: 'wheel', delta_y: ev.deltaY }); }, { passive: false });
+wrap.addEventListener('wheel', ev => { if (!S.authOk || !inputEnabled) return; ev.preventDefault(); sendInput({ action: 'wheel', delta_y: ev.deltaY }); }, { passive: false });
 wrap.addEventListener('contextmenu', ev => ev.preventDefault());
 
 /* ---------------- physical keyboard ---------------- */
-const controlActive = () => !$('viewer').classList.contains('hidden') && S.authOk && keyboardCapture && !(isTouchMobile && document.activeElement === kb);
+const controlActive = () => inputEnabled && !$('viewer').classList.contains('hidden') && S.authOk && keyboardCapture && !(isTouchMobile && document.activeElement === kb);
 function releaseAll() { for (const code of heldKeys) sendInput({ action: 'key_up', code }); heldKeys.clear(); sendInput({ action: 'release_all' }); }
 document.addEventListener('keydown', ev => {
   if (!controlActive()) return;
@@ -364,7 +369,7 @@ function flushKb() {
   resetKb();
 }
 function openNativeKeyboard() {
-  if (!isTouchMobile || !S.authOk) return;
+  if (!isTouchMobile || !S.authOk || !inputEnabled) return;
   try { kb.focus({ preventScroll: true }); } catch (e) { kb.focus(); }
 }
 kb.addEventListener('input', e => { if (!e.isComposing) flushKb(); });
