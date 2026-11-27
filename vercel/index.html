@@ -79,6 +79,7 @@ button:disabled{opacity:.5}
     <div class="bar"><span id="dot" class="dot"></span><strong>LYNX</strong><span id="status" class="status">Connecting…</span><label class="tiny" for="deviceSelect">Device</label><select id="deviceSelect" aria-label="Choose connected device"><option value="">No devices online</option></select></div>
     <div class="bar">
       <button id="btnFiles" class="secondary">📁 Files</button>
+      <button id="btnCamera" class="secondary" aria-pressed="false">📷 Start Camera</button>
       <button id="btnControl" class="on" title="Pause or resume remote mouse and keyboard">Controls: On</button>
       <select id="profile" title="Stream quality">
         <option value="auto">Balanced (auto)</option>
@@ -96,6 +97,7 @@ button:disabled{opacity:.5}
       <div id="placeholder" class="placeholder">Waiting for your Windows host to connect…</div>
       <div id="overlay" class="overlay hidden"></div>
     </div>
+    <section id="cameraPanel" class="panel hidden" style="margin-top:12px"><div class="bar"><strong>Remote webcam</strong><span id="cameraStatus" class="badge">Stopped</span></div><img id="cameraFeed" alt="Remote webcam stream" style="display:block;width:100%;max-height:65vh;object-fit:contain;background:#02040a;border-radius:12px"><p class="tiny">Camera streaming requires local approval on the selected Windows PC. The host dashboard shows when it is active.</p></section>
     <div id="stats" class="tiny"></div>
 
     <section id="files" class="hidden">
@@ -123,6 +125,7 @@ const $ = id => document.getElementById(id);
 const S = { ws: null, url: '', key: '', authOk: false, manual: false, retry: 0, timer: null, lastRx: 0, hostInfo: null, devices: [], selectedDeviceId: null };
 const heldKeys = new Set();
 let keyboardCapture = false;
+let cameraObjectUrl = null; let cameraOn = false;
 let inputEnabled = true;
 let rttMs = null, frames = 0, frameBytes = 0;
 let profile = 'auto';
@@ -141,7 +144,8 @@ const CONTROL_ACTIONS = new Set(['mouse_move','mouse_down','mouse_up','wheel','k
 function sendInput(m) { if (!S.authOk) return; if (!inputEnabled && CONTROL_ACTIONS.has(m.action)) return; wsSend(JSON.stringify({ type: 'input', ...m })); }
 function setInputEnabled(enabled) { inputEnabled = !!enabled; $('btnControl').textContent = inputEnabled ? 'Controls: On' : 'Controls: Paused'; $('btnControl').classList.toggle('on', inputEnabled); $('btnControl').classList.toggle('secondary', !inputEnabled); $('btnControl').setAttribute('aria-pressed', String(inputEnabled)); if (!inputEnabled) { releaseAll(); keyboardCapture = false; wrap.blur(); kb.blur(); toast('Remote mouse and keyboard paused. Screen and files remain available.'); } else { toast('Remote mouse and keyboard resumed. Tap the screen to control.'); } }
 $('btnControl').onclick = () => setInputEnabled(!inputEnabled);
-$('deviceSelect').onchange = () => { const id = $('deviceSelect').value || null; S.selectedDeviceId = id; resetScreen(); S.hostInfo = { online: false }; setStatus('Switching device…', 'warn'); showOverlay('Connecting to selected device…'); if (S.authOk) wsSend(JSON.stringify({ type: 'select_device', deviceId: id || '' })); };
+$('btnCamera').onclick = () => { if (!S.authOk || !S.selectedDeviceId) { toast('Select an online device first.', 'warn'); return; } cameraOn = !cameraOn; wsSend(JSON.stringify({type: cameraOn ? 'camera_start' : 'camera_stop'})); $('btnCamera').textContent = cameraOn ? 'Stop Camera' : '📷 Start Camera'; $('btnCamera').classList.toggle('on', cameraOn); $('cameraPanel').classList.toggle('hidden', !cameraOn); $('cameraStatus').textContent = cameraOn ? 'Requesting…' : 'Stopped'; if (!cameraOn) { $('cameraFeed').removeAttribute('src'); if(cameraObjectUrl) URL.revokeObjectURL(cameraObjectUrl); cameraObjectUrl=null; } };
+$('deviceSelect').onchange = () => { if(cameraOn){cameraOn=false;$('btnCamera').textContent='📷 Start Camera';$('btnCamera').classList.remove('on');$('cameraPanel').classList.add('hidden');$('cameraFeed').removeAttribute('src');if(cameraObjectUrl)URL.revokeObjectURL(cameraObjectUrl);cameraObjectUrl=null;} const id = $('deviceSelect').value || null; S.selectedDeviceId = id; resetScreen(); S.hostInfo = { online: false }; setStatus('Switching device…', 'warn'); showOverlay('Connecting to selected device…'); if (S.authOk) wsSend(JSON.stringify({ type: 'select_device', deviceId: id || '' })); };
 function sendFile(m) { return S.authOk ? wsSend(JSON.stringify({ type: 'file', ...m })) : false; }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -176,6 +180,7 @@ function connect() {
   };
 }
 function teardown() {
+  cameraOn = false; $('btnCamera').textContent='📷 Start Camera'; $('btnCamera').classList.remove('on'); $('cameraPanel').classList.add('hidden'); if(cameraObjectUrl) URL.revokeObjectURL(cameraObjectUrl); cameraObjectUrl=null;
   S.authOk = false;
   heldKeys.clear();
   for (const t of T.values()) if (!t.finished && !t.err) { t.err = 'Disconnected'; wake(t); abortWritable(t); }
@@ -219,6 +224,7 @@ function onMessage(ev) {
   const u8 = new Uint8Array(ev.data);
   if (!u8.length) return;
   if (u8[0] === 1) { frameBytes += u8.length; showFrame(ev.data); }
+  else if (u8[0] === 4) { const blob = new Blob([u8.slice(1)], {type:'image/jpeg'}); if (cameraObjectUrl) URL.revokeObjectURL(cameraObjectUrl); cameraObjectUrl = URL.createObjectURL(blob); $('cameraFeed').src = cameraObjectUrl; $('cameraStatus').textContent = 'Live'; }
   else if (u8[0] === 2) onDownloadChunk(u8);
 }
 
